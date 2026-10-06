@@ -2,7 +2,7 @@ apiVersion: v2
 name: mqtt-explorer
 description: Deploy MQTT Explorer browser mode on Kubernetes.
 type: application
-version: 0.1.1
+version: 0.1.2
 appVersion: 0.4.0-beta.5
 annotations:
   artifacthub.io/license: CC-BY-SA-4.0
