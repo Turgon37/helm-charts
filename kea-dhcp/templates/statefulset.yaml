@@ -1,0 +1,250 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "kea-dhcp.fullname" . }}
+  labels:
+    {{- include "kea-dhcp.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ template "kea-dhcp.fullname" . }}-headless
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "kea-dhcp.selectorLabels" . | nindent 6 }}
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "kea-dhcp.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}{{ toYaml . | nindent 8 }}{{- end }}
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum | trunc 63}}
+    spec:
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "kea-dhcp.serviceAccountName" . }}
+      {{- else if .Values.serviceAccount.name }}
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      {{- end }}
+
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+      {{- if not .Values.kea.interfaces }}
+      - name: init-keaconfig
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        image: "{{ tpl .Values.image.repository $ }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        command:
+        - sh
+        - "-c"
+        - |
+          set -ex
+          cp /mnt/config-map/* /mnt/kea/
+          echo "Finding interface..."
+          interface=$(route -n | grep '^0.0.0.0' | grep -o '[^ ]*$')
+          echo "Selected interface $interface"
+          sed -i "s/@INTERFACE@/${interface}/g" /mnt/kea/kea-dhcp.conf
+        volumeMounts:
+        - name: kea-config
+          mountPath: /mnt/kea
+        - name: kea-configmap
+          mountPath: /mnt/config-map
+      {{- end }}
+      - name: init-kearun
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        image: "{{ tpl .Values.image.repository $ }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        command:
+        - sh
+        - "-c"
+        - |
+          set -e
+          echo 'Init socket dir'
+          mkdir -p {{ .Values.env.KEA_CONTROL_SOCKET_DIR | quote }}
+          chmod 0750 {{ .Values.env.KEA_CONTROL_SOCKET_DIR | quote }}
+          echo 'Dump probes credentials into file'
+          echo -n "${CONTROL_HTTP_USERNAME}:${CONTROL_HTTP_PASSWORD}" | base64 > {{ .Values.env.KEA_CONTROL_SOCKET_DIR }}/readiness-secret
+        env:
+          - name: CONTROL_HTTP_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "kea-dhcp.fullname" . }}
+                key: readinessPassword
+          - name: CONTROL_HTTP_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "kea-dhcp.fullname" . }}
+                key: readinessUsername
+        volumeMounts:
+          - name: kea-run
+            mountPath: /run
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ tpl .Values.image.repository $ }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - -c
+            - /config/kea/kea-dhcp.conf
+          env:
+            - name: KEA_CONTROL_SOCKET_DIR
+              value: {{ .Values.env.KEA_CONTROL_SOCKET_DIR | quote }}
+            - name: KEA_DHCP_DATA_DIR
+              value: {{ .Values.env.KEA_DHCP_DATA_DIR | quote }}
+            - name: KEA_LOCKFILE_DIR
+              value: {{ .Values.env.KEA_LOCKFILE_DIR | quote }}
+            - name: KEA_LOGGER_DESTINATION
+              value: {{ .Values.env.KEA_LOGGER_DESTINATION | quote }}
+            - name: KEA_PIDFILE_DIR
+              value: {{ .Values.env.KEA_PIDFILE_DIR | quote }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: dhcp
+              containerPort: 67
+              protocol: UDP
+          {{- if .Values.probes.liveness.enabled }}
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  wget -q -T 2 -O - \
+                    --header="Content-Type: application/json" \
+                    --header="Authorization: Basic $(cat {{ .Values.env.KEA_CONTROL_SOCKET_DIR }}/readiness-secret)" \
+                    --post-data='{"command":"status-get"}' \
+                    http://127.0.0.1:8005/ |
+                  grep -Eq '"result"[[:space:]]*:[[:space:]]*0'
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+          {{- end }}
+          {{- if .Values.probes.readiness.enabled }}
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  wget -q -T 2 -O - \
+                    --header="Content-Type: application/json" \
+                    --header="Authorization: Basic $(cat {{ .Values.env.KEA_CONTROL_SOCKET_DIR }}/readiness-secret)" \
+                    --post-data='{"command":"status-get"}' \
+                    http://127.0.0.1:8005/ |
+                  grep -Eq '"sockets"[[:space:]]*:[[:space:]]*\{[^}]*"status"[[:space:]]*:[[:space:]]*"ready"'
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+          - name: data
+            mountPath: {{ .Values.env.KEA_DHCP_DATA_DIR }}
+          - name: kea-run
+            mountPath: /run
+          - name: kea-config
+            mountPath: /config/kea
+          - name: kea-secret
+            mountPath: /secrets/kea
+          {{- with .Values.extraVolumeMounts }}
+          {{-   toYaml . | nindent 10 }}
+          {{- end }}
+        {{- if .Values.metrics.enabled }}
+        - name: {{ .Chart.Name }}-metrics
+          securityContext:
+            {{- toYaml .Values.metrics.securityContext | nindent 12 }}
+          image: "{{ .Values.metrics.image.repository }}:{{ .Values.metrics.image.tag | default "latest" }}"
+          imagePullPolicy: {{ .Values.metrics.image.pullPolicy }}
+          args:
+          - --port
+          - {{ .Values.metrics.service.port | quote }}
+          - {{ .Values.env.KEA_CONTROL_SOCKET_DIR }}/kea-dhcp{{ .Values.kea.ipVersion }}-ctrl.sock
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.metrics.service.port }}
+              protocol: TCP
+          # TODO until https://github.com/mweinelt/kea-exporter/pull/65
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "kill -s INT 1"]
+          resources:
+            {{- toYaml .Values.metrics.resources | nindent 12 }}
+          volumeMounts:
+          - name: kea-run
+            mountPath: /run
+        {{- end }}
+      volumes:
+        {{- if .Values.kea.interfaces }}
+        - name: kea-config
+          configMap:
+            name: "{{ include "kea-dhcp.fullname" . }}"
+        {{- else }}
+        - name: kea-config
+          emptyDir: {}
+        - name: kea-configmap
+          configMap:
+            name: "{{ include "kea-dhcp.fullname" . }}"
+        {{- end }}
+        - name: kea-secret
+          secret:
+            secretName: "{{ include "kea-dhcp.fullname" . }}"
+        - name: kea-run
+          emptyDir:
+            mode: 0750
+        {{- if not .Values.persistence.enabled }}
+        - name: data
+          emptyDir: {}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{-   toYaml . | nindent 8 }}
+        {{- end }}
+{{- if .Values.persistence }}
+{{-   if .Values.persistence.enabled }}
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      annotations:
+      {{- range $key, $value := .Values.persistence.annotations }}
+        {{ $key }}: {{ $value }}
+      {{- end }}
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: {{ .Values.persistence.size | quote }}
+      {{- if .Values.persistence.storageClass }}
+      {{- if (eq "-" .Values.persistence.storageClass) }}
+      storageClassName: ""
+      {{- else }}
+      storageClassName: "{{ .Values.persistence.storageClass }}"
+      {{- end }}
+      {{- end }}
+{{-   end }}
+{{- end }}

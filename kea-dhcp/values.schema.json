@@ -1,0 +1,586 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "kea-dhcp values",
+  "type": "object",
+  "additionalProperties": false,
+  "definitions": {
+    "stringMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "initialDelaySeconds": { "type": "integer", "minimum": 0 },
+        "periodSeconds": { "type": "integer", "minimum": 1 },
+        "timeoutSeconds": { "type": "integer", "minimum": 1 },
+        "failureThreshold": { "type": "integer", "minimum": 1 }
+      },
+      "required": [
+        "enabled",
+        "initialDelaySeconds",
+        "periodSeconds",
+        "timeoutSeconds",
+        "failureThreshold"
+      ]
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": ["string", "null"] },
+        "pullPolicy": {
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"]
+        }
+      },
+      "required": ["repository", "pullPolicy"]
+    },
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "create": { "type": "boolean" },
+        "automount": { "type": "boolean" },
+        "annotations": { "$ref": "#/definitions/stringMap" },
+        "name": { "type": "string" }
+      },
+      "required": ["create", "automount", "annotations", "name"]
+    },
+    "securityContext": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "allowPrivilegeEscalation": { "type": "boolean" },
+        "capabilities": {
+          "type": "object",
+          "properties": {
+            "add": { "$ref": "#/definitions/stringList" },
+            "drop": { "$ref": "#/definitions/stringList" }
+          },
+          "additionalProperties": true
+        },
+        "readOnlyRootFilesystem": { "type": "boolean" },
+        "runAsUser": { "type": "integer", "minimum": 0 },
+        "runAsGroup": { "type": "integer", "minimum": 0 },
+        "runAsNonRoot": { "type": "boolean" },
+        "fsGroup": { "type": "integer", "minimum": 0 },
+        "seccompProfile": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["RuntimeDefault", "Localhost", "Unconfined"]
+            }
+          },
+          "required": ["type"],
+          "additionalProperties": true
+        }
+      }
+    },
+    "resourceRequirements": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "hookLibrary": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "library": { "type": "string", "minLength": 1 },
+        "parameters": { "type": "object" }
+      },
+      "required": ["library"]
+    },
+    "optionData": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string" },
+        "code": { "type": "integer", "minimum": 0 },
+        "data": {
+          "type": ["string", "number", "integer", "boolean", "object", "array", "null"]
+        },
+        "space": { "type": "string" },
+        "csv": { "type": "boolean" },
+        "always-send": { "type": "boolean" },
+        "encapsulate": { "type": "string" }
+      },
+      "anyOf": [
+        { "required": ["name"] },
+        { "required": ["code"] }
+      ]
+    },
+    "reservation": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "ip-address": { "type": ["string", "null"] },
+        "ip-addresses": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "hw-address": { "type": "string" },
+        "duid": { "type": "string" },
+        "client-id": { "type": "string" },
+        "hostname": { "type": "string" },
+        "option-data": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/optionData" }
+        }
+      },
+      "anyOf": [
+        { "required": ["ip-address"] },
+        { "required": ["ip-addresses"] },
+        { "required": ["hw-address"] },
+        { "required": ["duid"] },
+        { "required": ["client-id"] }
+      ]
+    },
+    "pool": {
+      "type": "object",
+      "properties": {
+        "pool": { "type": "string" }
+      },
+      "required": ["pool"],
+      "additionalProperties": true
+    },
+    "subnet": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "subnet": { "type": "string" },
+        "id": { "type": ["integer", "string"] },
+        "interface": { "type": "string" },
+        "pools": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/pool" }
+        },
+        "option-data": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/optionData" }
+        },
+        "reservations": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/reservation" }
+        }
+      },
+      "required": ["subnet"]
+    },
+    "sharedNetwork": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string" },
+        "subnets": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/subnet" }
+        }
+      },
+      "required": ["name"]
+    },
+    "clientClass": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "ddnsDomainServer": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "ip-address": { "type": "string" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      },
+      "required": ["ip-address"]
+    },
+    "ddnsDomain": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string" },
+        "key-name": { "type": "string" },
+        "dns-servers": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ddnsDomainServer" }
+        }
+      },
+      "required": ["name"]
+    },
+    "ddnsDomainSet": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "ddns-domains": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ddnsDomain" }
+        }
+      }
+    },
+    "metricsImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string" },
+        "pullPolicy": {
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"]
+        }
+      },
+      "required": ["repository", "tag", "pullPolicy"]
+    },
+    "metricsService": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["ClusterIP", "NodePort", "LoadBalancer"]
+        },
+        "annotations": { "$ref": "#/definitions/stringMap" },
+        "labels": { "$ref": "#/definitions/stringMap" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      },
+      "required": ["type", "annotations", "labels", "port"]
+    },
+    "metricsDashboard": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "configMapName": { "type": "string" },
+        "labels": { "$ref": "#/definitions/stringMap" },
+        "annotations": { "$ref": "#/definitions/stringMap" }
+      },
+      "required": ["enabled", "configMapName", "labels", "annotations"]
+    },
+    "serviceMonitor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "labels": { "$ref": "#/definitions/stringMap" },
+        "annotations": { "$ref": "#/definitions/stringMap" },
+        "interval": { "type": "string" },
+        "scrapeTimeout": { "type": ["string", "null"] },
+        "honorLabels": { "type": ["boolean", "null"] },
+        "metricRelabelings": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "relabelings": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "namespaceSelector": { "type": "object" }
+      },
+      "required": [
+        "enabled",
+        "labels",
+        "annotations",
+        "interval",
+        "scrapeTimeout",
+        "honorLabels",
+        "metricRelabelings",
+        "relabelings",
+        "namespaceSelector"
+      ]
+    },
+    "persistence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "existingClaim": { "type": ["string", "null"] },
+        "annotations": { "$ref": "#/definitions/stringMap" },
+        "accessModes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "ReadWriteOnce",
+              "ReadOnlyMany",
+              "ReadWriteMany",
+              "ReadWriteOncePod"
+            ]
+          }
+        },
+        "size": { "type": "string" },
+        "storageClass": { "type": ["string", "null"] },
+        "mountPath": {
+          "type": ["string", "null"],
+          "pattern": "^/"
+        }
+      },
+      "required": ["enabled", "size"]
+    },
+    "serviceDchp": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["ClusterIP", "NodePort", "LoadBalancer"]
+        },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "annotations": { "$ref": "#/definitions/stringMap" },
+        "clusterIP": { "type": ["string", "null"] },
+        "loadBalancerIP": { "type": ["string", "null"] },
+        "loadBalancerSourceRanges": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "externalIPs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "externalTrafficPolicy": {
+          "type": ["string", "null"],
+          "enum": ["Cluster", "Local", null]
+        },
+        "nodePort": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "maximum": 65535
+        }
+      },
+      "required": ["type", "port", "annotations"]
+    },
+    "keaConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "interfaces": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "ipVersion": {
+          "type": "integer",
+          "enum": [4]
+        },
+        "dhcpSocketType": {
+          "type": "string",
+          "enum": ["raw", "udp"]
+        },
+        "validLifetime": { "type": ["string", "integer"] },
+        "renewTimer": { "type": ["string", "integer"] },
+        "rebindTimer": { "type": ["string", "integer"] },
+        "leaseLfcInterval": { "type": "integer", "minimum": 0 },
+        "logSeverity": {
+          "type": "string",
+          "enum": ["DEBUG", "INFO", "WARN", "ERROR", "FATAL"]
+        },
+        "debugLevel": { "type": "integer", "minimum": 0, "maximum": 99 },
+        "hooksLibraries": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/hookLibrary" }
+        },
+        "options": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/optionData" }
+        },
+        "reservations": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/reservation" }
+        },
+        "subnets": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/subnet" }
+        },
+        "sharedNetworks": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/sharedNetwork" }
+        },
+        "clientClasses": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/clientClass" }
+        },
+        "ddns": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "loglevel": {
+              "type": "string",
+              "enum": ["DEBUG", "INFO", "WARN", "ERROR", "FATAL"]
+            },
+            "prefix": { "type": "string" },
+            "suffix": { "type": "string" },
+            "forward": { "$ref": "#/definitions/ddnsDomainSet" },
+            "reverse": { "$ref": "#/definitions/ddnsDomainSet" }
+          },
+          "required": ["enabled", "loglevel", "prefix", "suffix", "forward", "reverse"]
+        }
+      },
+      "required": [
+        "interfaces",
+        "ipVersion",
+        "dhcpSocketType",
+        "validLifetime",
+        "renewTimer",
+        "rebindTimer",
+        "logSeverity",
+        "debugLevel",
+        "hooksLibraries",
+        "options",
+        "reservations",
+        "subnets",
+        "ddns"
+      ]
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "grafana": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "dashboard": { "$ref": "#/definitions/metricsDashboard" }
+          },
+          "required": ["dashboard"]
+        },
+        "image": { "$ref": "#/definitions/metricsImage" },
+        "resources": { "$ref": "#/definitions/resourceRequirements" },
+        "securityContext": { "$ref": "#/definitions/securityContext" },
+        "service": { "$ref": "#/definitions/metricsService" },
+        "serviceMonitor": { "$ref": "#/definitions/serviceMonitor" }
+      },
+      "required": [
+        "enabled",
+        "grafana",
+        "image",
+        "resources",
+        "securityContext",
+        "service",
+        "serviceMonitor"
+      ]
+    },
+    "role": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "annotations": { "$ref": "#/definitions/stringMap" }
+      },
+      "required": ["annotations"]
+    },
+    "roleBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "annotations": { "$ref": "#/definitions/stringMap" }
+      },
+      "required": ["annotations"]
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dhcp": { "$ref": "#/definitions/serviceDchp" }
+      },
+      "required": ["dhcp"]
+    }
+  },
+  "properties": {
+    "nameOverride": { "type": "string" },
+    "fullnameOverride": { "type": "string" },
+    "image": { "$ref": "#/definitions/image" },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1 }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+      }
+    },
+    "env": { "$ref": "#/definitions/stringMap" },
+    "extraEnv": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "serviceAccount": { "$ref": "#/definitions/serviceAccount" },
+    "replicaCount": { "type": "integer", "minimum": 1 },
+    "revisionHistoryLimit": { "type": "integer", "minimum": 0 },
+    "podAnnotations": { "$ref": "#/definitions/stringMap" },
+    "podLabels": { "$ref": "#/definitions/stringMap" },
+    "resources": { "$ref": "#/definitions/resourceRequirements" },
+    "podSecurityContext": { "$ref": "#/definitions/securityContext" },
+    "securityContext": { "$ref": "#/definitions/securityContext" },
+    "probes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "liveness": { "$ref": "#/definitions/probe" },
+        "readiness": { "$ref": "#/definitions/probe" }
+      },
+      "required": ["liveness", "readiness"]
+    },
+    "kea": { "$ref": "#/definitions/keaConfig" },
+    "metrics": { "$ref": "#/definitions/metrics" },
+    "role": { "$ref": "#/definitions/role" },
+    "roleBinding": { "$ref": "#/definitions/roleBinding" },
+    "service": { "$ref": "#/definitions/service" },
+    "nodeSelector": { "$ref": "#/definitions/stringMap" },
+    "tolerations": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "affinity": { "type": "object" },
+    "extraConfigMapKeys": { "$ref": "#/definitions/stringMap" },
+    "extraVolumeMounts": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "extraVolumes": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "persistence": { "$ref": "#/definitions/persistence" }
+  },
+  "required": [
+    "nameOverride",
+    "fullnameOverride",
+    "image",
+    "imagePullSecrets",
+    "env",
+    "extraEnv",
+    "serviceAccount",
+    "replicaCount",
+    "revisionHistoryLimit",
+    "podAnnotations",
+    "podLabels",
+    "resources",
+    "podSecurityContext",
+    "securityContext",
+    "probes",
+    "kea",
+    "metrics",
+    "role",
+    "roleBinding",
+    "service",
+    "nodeSelector",
+    "tolerations",
+    "affinity",
+    "extraConfigMapKeys",
+    "extraVolumeMounts",
+    "extraVolumes",
+    "persistence"
+  ]
+}

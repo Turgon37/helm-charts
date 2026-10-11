@@ -1,0 +1,329 @@
+# -- Override the chart name (used in resource names)
+nameOverride: ""
+# -- Fully override the resource name prefix
+fullnameOverride: ""
+
+# -- Image configuration
+image:
+  ## -- Container image repository
+  repository: jonasal/kea-dhcp{{ .Values.kea.ipVersion }}
+  ## -- Container image tag (defaults to Chart appVersion)
+  tag: ~
+  ## -- Image pull policy
+  pullPolicy: IfNotPresent
+
+# -- Image pull secrets
+imagePullSecrets: []
+
+# -- Environment variables for the Kea containers
+env:
+  # -- Unix Sockets
+  KEA_CONTROL_SOCKET_DIR: /run/kea
+  # -- Host persistents Files
+  KEA_DHCP_DATA_DIR: /data/kea
+  # -- Specifies a directory where the logging system should create its lock file
+  KEA_LOCKFILE_DIR: /run/kea
+  # -- Specifies logging output
+  KEA_LOGGER_DESTINATION: stdout
+  # -- Kea pidfile
+  KEA_PIDFILE_DIR: /run/kea
+
+# -- Additional environment variables as a list of {name, value} objects
+extraEnv: []
+
+# -- Service account configuration
+serviceAccount:
+  ## -- Whether to create a service account
+  create: true
+  ## -- Whether to automount the service account token
+  automount: false
+  ## -- Annotations for the service account
+  annotations: {}
+  ## -- Service account name (auto-generated if empty and create is true)
+  name: ""
+
+# -- Number of replicas
+# More replicas is not available for now due Kea implementation of peers url should be ipv4 or ipv6 addresses instead of dnsname
+replicaCount: 1
+# -- Number of revisions to keep in history
+revisionHistoryLimit: 3
+
+# -- Additional pod annotations
+podAnnotations: {}
+# -- Additional pod labels
+podLabels: {}
+
+# -- Resource requests and limits
+resources:
+  limits:
+    cpu: 1
+    memory: 32Mi
+  requests:
+    cpu: 50m
+    memory: 16Mi
+
+# -- Pod-level security context
+podSecurityContext:
+  fsGroup: 1000
+  runAsGroup: 1000
+  # TODO to set after https://github.com/JonasAlfredsson/docker-kea/issues/147
+  runAsNonRoot: false
+  # TODO set to 1000
+  runAsUser: 0
+  seccompProfile:
+    type: RuntimeDefault
+
+# -- Security context for the main container
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    add:
+    - NET_BIND_SERVICE
+    drop: ['ALL']
+  readOnlyRootFilesystem: true
+
+# -- Liveness and readiness probe configuration
+probes:
+  liveness:
+    ## -- Enable liveness probe
+    enabled: true
+    ## -- Initial delay before first probe
+    initialDelaySeconds: 20
+    ## -- Probe interval
+    periodSeconds: 10
+    ## -- Probe timeout
+    timeoutSeconds: 4
+    ## -- Number of failures before restart
+    failureThreshold: 3
+
+  readiness:
+    ## -- Enable readiness probe
+    enabled: true
+    ## -- Initial delay before first probe
+    initialDelaySeconds: 20
+    ## -- Probe interval
+    periodSeconds: 5
+    ## -- Probe timeout
+    timeoutSeconds: 4
+    ## -- Number of failures before marking unready
+    failureThreshold: 2
+
+# -- Kea config
+kea:
+  # -- Specify interfaces to listen
+  interfaces: []
+  # -- Dhcp server protocol version
+  ipVersion: 4
+  # -- When a logger's severity is set to DEBUG, this value specifies the level of debug messages to be printed
+  debugLevel: 0
+  # -- Specifies that the IP/UDP sockets will be opened on all interfaces on which the server listens
+  dhcpSocketType: raw
+  # -- Specifies the interval, in seconds, at which the server will perform a lease file cleanup (LFC)
+  leaseLfcInterval: 86400
+  # -- This specifies the category of messages loggedThis specifies the category of messages logged
+  logSeverity: "DEBUG"
+
+  validLifetime: "4000"
+  renewTimer: "1000"
+  rebindTimer: "2000"
+  hooksLibraries: []
+  options: []
+    # - name: domain-name-servers
+    #   data: 192.168.1.2
+    # - name: domain-name
+    #   data: local
+    # - name: domain-search
+    #   data: local
+    # - code: 66
+    #   data: 192.168.1.2
+    #   name: tftp-server-name
+  reservations: []
+    # - ip-address: "192.168.1.2"
+    #   hw-address: "aa:aa:aa:aa:aa:aa"
+    #   hostname: "hostname"
+    #   option-data:
+    #     - name: "tftp-servers"
+    #       data: "10.1.1.202,10.1.1.203"
+  subnets: []
+    # - subnet: "192.168.1.0/24"
+    #   pools:
+    #     - pool: "192.168.1.10-192.168.1.254"
+    #   option-data:
+    #     - name: "routers"
+    #       data: "172.16.10.1"
+
+
+
+
+
+
+  ddns:
+    enabled: false
+    loglevel: "DEBUG"
+    prefix: "myhost"
+    suffix: "home.arpa."
+    forward: {}
+      # ddns-domains:
+      # - name: home.arpa.
+      #   key-name: ''
+      #   dns-servers:
+      #   - ip-address: 172.16.32.2
+      #     port: 53
+    reverse: {}
+      # ddns-domains:
+      # - name: 168.192.in-addr.arpa.
+      #   key-name: ''
+      #   dns-servers:
+      #   - ip-address: 172.16.32.2
+      #     port: 53
+
+metrics:
+  # -- Enable metrics exposition
+  enabled: false
+
+  # -- Grafana dashboard integration. The chart vendors the bundled
+  # `kea_exporter` dashboard under `dashboard/keadhcp.json` and can ship
+  # it as a ConfigMap discoverable by the Grafana sidecar (or any tool that
+  # selects ConfigMaps by label).
+  grafana:
+    dashboard:
+      # -- Deploy a ConfigMap containing the bundled Grafana dashboard.
+      enabled: false
+      # -- ConfigMap name. Defaults to `<release>-dashboard`.
+      configMapName: ""
+      # -- Extra labels added to the ConfigMap. The chart already sets
+      # `grafana_dashboard: "1"` for sidecar discovery; extend or override here to
+      # match your Grafana's selector (e.g. `release: kube-prometheus-stack`).
+      labels: {}
+      # -- Annotations added to the ConfigMap.
+      annotations: {}
+
+  # -- Image configuration.
+  image:
+    # -- Container image repository.
+    repository: ghcr.io/mweinelt/kea-exporter
+    # -- Container image tag (defaults to the chart `appVersion`).
+    tag: "v0.7.1"
+    # -- Image pull policy.
+    pullPolicy: IfNotPresent
+
+  # -- Resource requests and limits
+  resources:
+    limits:
+      cpu: 1
+      memory: 64Mi
+    requests:
+      cpu: 10m
+      memory: 32Mi
+
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ['ALL']
+    readOnlyRootFilesystem: true
+    runAsUser: 1000
+
+  service:
+    type: ClusterIP
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9547"
+    labels: {}
+
+    # -- Metric container port
+    port: 9547
+
+  # -- Prometheus Operator ServiceMonitor. Requires the
+  # `monitoring.coreos.com/v1` CRD.
+  serviceMonitor:
+    # -- Create a ServiceMonitor resource.
+    enabled: false
+    # -- Labels for Prometheus to select this ServiceMonitor (e.g.
+    # `release: kube-prometheus-stack`).
+    labels: {}
+    # -- Annotations added to the ServiceMonitor.
+    annotations: {}
+    # -- Scrape interval.
+    interval: 30s
+    # -- Scrape timeout.
+    scrapeTimeout: 10s
+    # -- Honor the exporter's own labels.
+    honorLabels: true
+    # -- Metric relabelings applied to scraped samples.
+    metricRelabelings: []
+    # -- Target relabelings applied to the scrape target.
+    relabelings: []
+    # -- Namespace selector for the ServiceMonitor (empty = same namespace).
+    namespaceSelector: {}
+
+
+
+
+
+
+
+role:
+  # Annotations to add to the Role
+  annotations: {}
+
+roleBinding:
+  # Annotations to add to the RoleBinding
+  annotations: {}
+
+service:
+  dhcp:
+    type: ClusterIP
+    port: 67
+    ## Specify the nodePort value for the LoadBalancer and NodePort service types.
+    ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport
+    ##
+    # nodePort:
+    ## Provide any additional annotations which may be required. This can be used to
+    ## set the LoadBalancer service type to internal only.
+    ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#internal-load-balancer
+    ##
+    annotations: {}
+    ## Use loadBalancerIP to request a specific static IP,
+    ## otherwise leave blank
+    ##
+    loadBalancerIP:
+    # loadBalancerSourceRanges: []
+    ## Set the externalTrafficPolicy in the Service to either Cluster or Local
+    # externalTrafficPolicy: Cluster
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+  # affinity:
+  #   podAntiAffinity:
+  #     requiredDuringSchedulingIgnoredDuringExecution:
+  #       - labelSelector:
+  #           matchExpressions:
+  #             - key: app.kubernetes.io/name
+  #               operator: In
+  #               values:
+  #                 - kea-dhcp
+  #         topologyKey: kubernetes.io/hostname
+
+extraConfigMapKeys: {}
+  # extraConfigMapKeys:
+  #   run-script.sh: |
+  #     #!/bin/sh
+
+extraVolumeMounts: []
+  # - name: hook-run-scripts
+  #   mountPath: /hooks
+extraVolumes: []
+  # - name: hook-run-scripts
+  #   configMap:
+  #     name: prod-dhcp-kea-dhcp
+  #     items:
+  #     - key: run-script.sh
+  #       path: run-script.sh
+  #     defaultMode: 0555
+
+persistence:
+  enabled: false
+  size: 100Mi

@@ -1,0 +1,23 @@
+{{- if .Values.metrics.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "kea-dhcp.fullname" . }}-metrics
+  labels:
+    {{- include "kea-dhcp.labels" . | nindent 4 }}
+    {{- if .Values.metrics.service.labels -}}
+    {{ toYaml .Values.metrics.service.labels | nindent 4 }}
+    {{- end -}}
+  {{- if .Values.metrics.service.annotations }}
+  annotations: {{ toYaml .Values.metrics.service.annotations | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.metrics.service.type }}
+  ports:
+  - name: metrics
+    port: {{ .Values.metrics.service.port }}
+    targetPort: metrics
+  selector:
+    app.kubernetes.io/name: {{ include "kea-dhcp.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}

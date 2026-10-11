@@ -1,0 +1,146 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: {{ include "kea-dhcp.fullname" . }}
+  labels:
+    {{- include "kea-dhcp.labels" . | nindent 4 }}
+data:
+  kea-dhcp.conf: |
+    {
+      "Dhcp{{ .Values.kea.ipVersion }}": {
+        "control-sockets": [
+          {
+            "socket-name": "kea-dhcp{{ .Values.kea.ipVersion }}-ctrl.sock",
+            "socket-type": "unix"
+          },
+          {
+            "authentication": {
+              "clients": [
+                {
+                  "password-file": "readinessPassword",
+                  "user-file": "readinessUsername"
+                }
+              ],
+              "directory": "/secrets/kea",
+              "realm": "kea-control",
+              "type": "basic"
+            },
+            "socket-address": "127.0.0.1",
+            "socket-port": 8005,
+            "socket-type": "http"
+          }
+        ],
+        "interfaces-config": {
+          "dhcp-socket-type": "{{ .Values.kea.dhcpSocketType }}",
+          {{- if .Values.kea.interfaces }}
+          "interfaces": {{ .Values.kea.interfaces | toJson }},
+          {{- else }}
+          "interfaces": [ "@INTERFACE@" ],
+          {{- end }}
+          "service-sockets-require-all": true
+        },
+        "lease-database": {
+          "lfc-interval": {{ .Values.kea.leaseLfcInterval }},
+          "max-row-errors": 1,
+          "name": "dhcp{{ .Values.kea.ipVersion }}.leases",
+          "persist": true,
+          "type": "memfile"
+        },
+        "loggers": [
+          {
+            {{- if eq .Values.kea.logSeverity "DEBUG" }}
+            "debuglevel": {{ .Values.kea.debugLevel }},
+            {{- end }}
+            "name": "kea-dhcp{{ .Values.kea.ipVersion }}",
+            "output_options": [
+              {
+                "output": "stdout"
+              }
+            ],
+            "severity": "{{ .Values.kea.logSeverity }}"
+          }
+        ],
+
+            "valid-lifetime": {{ .Values.kea.validLifetime }},
+            "renew-timer": {{ .Values.kea.renewTimer }},
+            "rebind-timer": {{ .Values.kea.rebindTimer }},
+            "reservations-global": true,
+            "reservations-in-subnet": false,
+
+            {{- if .Values.kea.hooksLibraries }}
+            "hooks-libraries": [
+              {{- range $index, $spec := .Values.kea.hooksLibraries }}
+              {{-   if ne $index 0 }},{{- end }}
+              {
+                "library": "/usr/local/lib/kea/hooks/{{ $spec.library }}",
+                {{- if $spec.parameters }}
+                "parameters": {{ $spec.parameters | toJson }}
+                {{- end }}
+              }
+              {{- end }}
+            ],
+            {{- end }}
+            {{- if .Values.kea.ddns.enabled }}
+            "dhcp-ddns" : {
+              "enable-updates" : true,
+              "server-ip" : "127.0.0.1",
+              "server-port" : 53001,
+              "max-queue-size" : 2048,
+              "ncr-protocol" : "UDP",
+              "ncr-format" : "JSON"
+            },
+            "ddns-send-updates" : true,
+            "ddns-override-no-update" : true,
+            "ddns-override-client-update" : true,
+            "ddns-replace-client-name" : "when-not-present",
+            "ddns-generated-prefix": {{ .Values.kea.ddns.prefix | quote }},
+            "ddns-qualifying-suffix" : {{ .Values.kea.ddns.suffix | quote  }},
+            "ddns-update-on-renew" : false,
+            "ddns-use-conflict-resolution" : true,
+            "hostname-char-set": "[^A-Za-z0-9.-]",
+            "hostname-char-replacement": "",
+            {{- end }}
+            {{- if .Values.kea.options }}
+            "option-data": {{ .Values.kea.options | toJson }},
+            {{- end }}
+            {{- if .Values.kea.reservations }}
+            "reservations": {{ .Values.kea.reservations | toJson }},
+            {{- end }}
+            {{- if .Values.kea.subnets }}
+            "subnet{{ .Values.kea.ipVersion }}": {{ .Values.kea.subnets | toJson }},
+            {{- end }}
+            {{- if .Values.kea.sharedNetworks }}
+            "shared-networks": {{ .Values.kea.sharedNetworks | toJson }},
+            {{- end }}
+            {{- if .Values.kea.clientClasses }}
+            "client-classes": {{ .Values.kea.clientClasses | toJson }}
+            {{- end }}
+        }
+    }
+  kea-dhcp-ddns.conf: |
+    {
+    {{- if .Values.kea.ddns.enabled }}
+      "DhcpDdns": {
+        "forward-ddns": {{ .Values.kea.ddns.forward | toJson }},
+        "reverse-ddns": {{ .Values.kea.ddns.reverse | toJson }},
+        "control-socket": {
+            "socket-type": "unix",
+            "socket-name": "/run/kea/kea-dhcp-ddns-ctrl.sock"
+        },
+        "loggers": [
+          {
+            "name": "kea-dhcp-ddns",
+            "output_options": [
+              {
+                "output": "stdout"
+              }
+            ],
+            "severity": "{{ .Values.kea.ddns.loglevel }}"
+          }
+        ]
+      }
+    {{- end }}
+    }
+  {{- if .Values.extraConfigMapKeys }}
+  {{-   .Values.extraConfigMapKeys | toYaml | nindent 2 }}
+  {{- end }}

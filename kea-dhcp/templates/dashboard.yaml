@@ -1,0 +1,22 @@
+{{- if .Values.metrics.grafana.dashboard.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ default (printf "%s-dashboard" (include "kea-dhcp.fullname" .)) .Values.metrics.grafana.dashboard.configMapName }}
+  labels:
+    {{- include "kea-dhcp.labels" . | nindent 4 }}
+    # Default label consumed by the Grafana sidecar (`grafana_dashboard: "1"`).
+    # Override or extend via `grafana.dashboard.labels` to match your discovery
+    # mechanism (sidecar label config, kube-prometheus-stack, etc.).
+    grafana_dashboard: "1"
+    {{- with .Values.metrics.grafana.dashboard.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.metrics.grafana.dashboard.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+  keadhcp.json: |-
+{{ .Files.Get "dashboard/keadhcp.json" | indent 4 }}
+{{- end }}
